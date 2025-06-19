@@ -7,6 +7,7 @@ use std::fs;
 pub struct Config {
     pub default_template: String,
     pub projects_dir: PathBuf,
+    pub bin_dir: PathBuf,
     pub auto_build: bool,
     pub editor: Option<String>,
 }
@@ -17,7 +18,8 @@ impl Default for Config {
         
         Self {
             default_template: "rust".to_string(),
-            projects_dir: home_dir.join("murex-projects"),
+            projects_dir: home_dir.join(".murex"),
+            bin_dir: home_dir.join(".murex/bin"),
             auto_build: false,
             editor: std::env::var("EDITOR").ok(),
         }
@@ -48,6 +50,11 @@ impl Config {
         // Ensure projects directory exists
         if !self.projects_dir.exists() {
             fs::create_dir_all(&self.projects_dir)?;
+        }
+        
+        // Ensure bin directory exists
+        if !self.bin_dir.exists() {
+            fs::create_dir_all(&self.bin_dir)?;
         }
         
         let config_path = get_config_file_path()?;

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use crate::config::{Config, get_config_dir};
 use crate::project::{Project, ProjectManager};
 use crate::templates::{TemplateManager, TemplateType};
+use crate::path_manager::PathManager;
+use crate::utils;
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -28,6 +30,16 @@ pub enum Commands {
     /// Remove a CLI utility project
     Remove {
         /// Name of the CLI utility to remove
+        name: String,
+    },
+    /// Install a CLI utility
+    Install {
+        /// Name of the CLI utility to install
+        name: String,
+    },
+    /// Uninstall a CLI utility
+    Uninstall {
+        /// Name of the CLI utility to uninstall
         name: String,
     },
     /// Manage templates
@@ -62,6 +74,8 @@ pub enum TemplateAction {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
+    /// Initialize configuration with interactive prompts
+    Init,
     /// Show current configuration
     Show,
     /// Set a configuration value
@@ -119,11 +133,19 @@ pub fn init_project(name: String, template: Option<String>) -> Result<()> {
     println!("  1. cd {}", project.path.display());
     println!("  2. murex build {}", name);
     
+    // Open project in editor
+    let config = Config::load()?;
+    match utils::open_project_in_editor(&project.path, &config) {
+        Ok(()) => println!("  ✨ Opened project in editor!"),
+        Err(e) => println!("  ⚠️  Could not open editor: {}", e.to_string().dimmed()),
+    }
+    
     Ok(())
 }
 
 pub fn list_projects() -> Result<()> {
     let project_manager = ProjectManager::new()?;
+    let path_manager = PathManager::new()?;
     let projects = project_manager.list_projects()?;
     
     if projects.is_empty() {
@@ -142,9 +164,16 @@ pub fn list_projects() -> Result<()> {
             "❌ Missing".bright_red()
         };
         
+        let installed = if path_manager.find_project_binary(&project).is_ok() {
+            "✅ Installed".bright_green()
+        } else {
+            "❌ Not installed".bright_red()
+        };
+        
         println!("  {} {}", project.name.bright_blue(), status);
         println!("    📁 {}", project.path.display().to_string().dimmed());
         println!("    🔧 Template: {}", project.template.dimmed());
+        println!("    📦 {}", installed.dimmed());
         println!("");
     }
     
@@ -153,6 +182,7 @@ pub fn list_projects() -> Result<()> {
 
 pub fn build_project(name: Option<String>) -> Result<()> {
     let project_manager = ProjectManager::new()?;
+    let path_manager = PathManager::new()?;
     
     let project_name = match name {
         Some(n) => n,
@@ -173,6 +203,18 @@ pub fn build_project(name: Option<String>) -> Result<()> {
     project.build()?;
     
     println!("{} Successfully built: {}", "✅".bright_green(), project_name.bright_blue());
+    
+    // Offer to install the project
+    let install = Confirm::new()
+        .with_prompt("Install to make globally available?")
+        .default(true)
+        .interact()?;
+        
+    if install {
+        path_manager.install_project(&project)?;
+        println!("You can now run {} from anywhere!", project_name.bright_green());
+    }
+    
     Ok(())
 }
 
@@ -228,16 +270,102 @@ pub fn handle_config_command(action: ConfigAction) -> Result<()> {
     let mut config = Config::load()?;
     
     match action {
+        ConfigAction::Init => {
+            println!("{} Welcome to Murex configuration setup!", "🚀".bright_green());
+            println!("This will help you configure murex for your development environment.\n");
+            
+            let template_manager = TemplateManager::new()?;
+            let available_templates = template_manager.list_templates()?;
+            
+            // Default template selection
+            let default_template = if available_templates.is_empty() {
+                println!("{} No templates found, using 'rust' as default.", "⚠️".bright_yellow());
+                "rust".to_string()
+            } else {
+                let selection = Select::new()
+                    .with_prompt("What should be your default template?")
+                    .default(0)
+                    .items(&available_templates)
+                    .interact()?;
+                available_templates[selection].clone()
+            };
+            
+            // Projects directory
+            let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            let default_projects_dir = home_dir.join(".murex");
+            
+            let projects_dir_input: String = Input::new()
+                .with_prompt("Where should murex store your CLI projects?")
+                .default(default_projects_dir.display().to_string())
+                .interact_text()?;
+            let projects_dir = PathBuf::from(projects_dir_input);
+            
+            // Auto-build preference
+            let auto_build = Confirm::new()
+                .with_prompt("Enable auto-build when creating projects?")
+                .default(false)
+                .interact()?;
+                
+            // Editor preference
+            let current_editor = std::env::var("EDITOR").unwrap_or_else(|_| "".to_string());
+            let editor_prompt = if current_editor.is_empty() {
+                "What is your preferred editor? (leave empty for system default)".to_string()
+            } else {
+                format!("What is your preferred editor? (current: {})", current_editor)
+            };
+            
+            let editor_input: String = Input::new()
+                .with_prompt(&editor_prompt)
+                .default(current_editor.clone())
+                .allow_empty(true)
+                .interact_text()?;
+                
+            let editor = if editor_input.trim().is_empty() {
+                None
+            } else {
+                Some(editor_input.trim().to_string())
+            };
+            
+            // Create and save new configuration
+            let new_config = Config {
+                default_template,
+                projects_dir: projects_dir.clone(),
+                bin_dir: projects_dir.join("bin"),
+                auto_build,
+                editor,
+            };
+            
+            new_config.save()?;
+            
+            println!("\n{} Configuration saved successfully!", "✅".bright_green());
+            println!("📋 Summary:");
+            println!("  Default template: {}", new_config.default_template.bright_blue());
+            println!("  Projects directory: {}", new_config.projects_dir.display().to_string().bright_blue());
+            println!("  Bin directory: {}", new_config.bin_dir.display().to_string().bright_blue());
+            println!("  Auto-build: {}", if new_config.auto_build { "enabled".bright_green() } else { "disabled".bright_red() });
+            if let Some(ref editor) = new_config.editor {
+                println!("  Editor: {}", editor.bright_blue());
+            } else {
+                println!("  Editor: {}", "system default".dimmed());
+            }
+            println!("\nYou can change these settings later with {} commands.", "murex config set".bright_green());
+            
+            // Check PATH setup
+            let path_manager = PathManager::new()?;
+            path_manager.check_path_setup()?;
+        }
         ConfigAction::Show => {
             println!("{} Current configuration:", "⚙️".bright_blue());
             println!("  Default template: {}", config.default_template.bright_green());
             println!("  Projects directory: {}", config.projects_dir.display());
+            println!("  Bin directory: {}", config.bin_dir.display());
             println!("  Auto-build: {}", if config.auto_build { "enabled".bright_green() } else { "disabled".bright_red() });
         }
         ConfigAction::Set { key, value } => {
             match key.as_str() {
                 "default_template" => config.default_template = value.clone(),
                 "projects_dir" => config.projects_dir = PathBuf::from(&value),
+                "bin_dir" => config.bin_dir = PathBuf::from(&value),
                 "auto_build" => config.auto_build = value.parse().unwrap_or(false),
                 _ => {
                     println!("{} Unknown configuration key: {}", "❌".bright_red(), key);
@@ -260,6 +388,45 @@ pub fn handle_config_command(action: ConfigAction) -> Result<()> {
             }
         }
     }
+    
+    Ok(())
+}
+
+pub fn install_project(name: String) -> Result<()> {
+    let project_manager = ProjectManager::new()?;
+    let path_manager = PathManager::new()?;
+    
+    let project = project_manager.get_project(&name)?;
+    
+    if !project.path.exists() {
+        println!("{} Project directory does not exist: {}", "❌".bright_red(), project.path.display());
+        return Ok(());
+    }
+    
+    println!("{} Installing CLI utility: {}", "📦".bright_blue(), name.bright_blue());
+    
+    // Check if project is built
+    if path_manager.find_project_binary(&project).is_err() {
+        println!("  🔨 Project not built, building first...");
+        project.build()?;
+    }
+    
+    path_manager.install_project(&project)?;
+    
+    println!("{} Successfully installed: {}", "✅".bright_green(), name.bright_blue());
+    println!("You can now run {} from anywhere!", name.bright_green());
+    
+    Ok(())
+}
+
+pub fn uninstall_project(name: String) -> Result<()> {
+    let path_manager = PathManager::new()?;
+    
+    println!("{} Uninstalling CLI utility: {}", "🗑️".bright_yellow(), name.bright_blue());
+    
+    path_manager.uninstall_project(&name)?;
+    
+    println!("{} Successfully uninstalled: {}", "✅".bright_green(), name.bright_blue());
     
     Ok(())
 }

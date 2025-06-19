@@ -12,6 +12,9 @@ pub enum TemplateType {
     Python,
     Node,
     Go,
+    Bash,
+    Zsh,
+    Bun,
     Custom(String),
 }
 
@@ -22,6 +25,9 @@ impl From<&str> for TemplateType {
             "python" => TemplateType::Python,
             "node" => TemplateType::Node,
             "go" => TemplateType::Go,
+            "bash" => TemplateType::Bash,
+            "zsh" => TemplateType::Zsh,
+            "bun" => TemplateType::Bun,
             _ => TemplateType::Custom(s.to_string()),
         }
     }
@@ -34,6 +40,9 @@ impl ToString for TemplateType {
             TemplateType::Python => "python".to_string(),
             TemplateType::Node => "node".to_string(),
             TemplateType::Go => "go".to_string(),
+            TemplateType::Bash => "bash".to_string(),
+            TemplateType::Zsh => "zsh".to_string(),
+            TemplateType::Bun => "bun".to_string(),
             TemplateType::Custom(name) => name.clone(),
         }
     }
@@ -66,6 +75,9 @@ impl TemplateManager {
             "python".to_string(),
             "node".to_string(),
             "go".to_string(),
+            "bash".to_string(),
+            "zsh".to_string(),
+            "bun".to_string(),
         ];
         
         for name in self.custom_templates.keys() {
@@ -84,6 +96,9 @@ impl TemplateManager {
             "python" => self.create_python_project(project_path, project_name),
             "node" => self.create_node_project(project_path, project_name),
             "go" => self.create_go_project(project_path, project_name),
+            "bash" => self.create_bash_project(project_path, project_name),
+            "zsh" => self.create_zsh_project(project_path, project_name),
+            "bun" => self.create_bun_project(project_path, project_name),
             _ => {
                 if let Some(custom_template) = self.custom_templates.get(template) {
                     self.create_from_custom_template(custom_template, project_path, project_name)
@@ -387,6 +402,177 @@ go build -o {}
 ./{} hello --name "Your Name"
 ```
 "#, project_name, project_name, project_name);
+        
+        fs::write(project_path.join("README.md"), readme)?;
+        
+        Ok(())
+    }
+    
+    fn create_bash_project(&self, project_path: &Path, project_name: &str) -> Result<()> {
+        // Create main.sh
+        let main_sh = format!(r#"#!/bin/bash
+
+# {}
+# A CLI utility created with Murex
+
+# Hello command
+hello() {{
+    name=${{1:-World}}
+    echo "Hello, $name!"
+}}
+
+# Main function
+main() {{
+    case $1 in
+        hello)
+            hello $2
+            ;;
+        --help|-h)
+            echo "Usage: {} [command] [options]"
+            echo "Commands:"
+            echo "  hello [name]  Say hello to someone"
+            echo "  --help        Show this help message"
+            ;;
+        *)
+            echo "Welcome to {}! Use --help for more information."
+            ;;
+    esac
+}}
+
+main "$@"
+"#, project_name, project_name, project_name);
+        
+        fs::write(project_path.join("main.sh"), main_sh)?;
+        
+        // Create README
+        let readme = format!(r#"# {}
+
+A CLI utility created with Murex.
+
+## Installation
+
+```bash
+chmod +x main.sh
+```
+
+## Usage
+
+```bash
+./main.sh hello "Your Name"
+```
+"#, project_name);
+        
+        fs::write(project_path.join("README.md"), readme)?;
+        
+        Ok(())
+    }
+    
+    fn create_zsh_project(&self, project_path: &Path, project_name: &str) -> Result<()> {
+        // Create main.zsh
+        let main_zsh = format!(r#"#!/bin/zsh
+
+# {}
+# A CLI utility created with Murex
+
+# Hello command
+hello() {{
+    name=${{1:-World}}
+    echo "Hello, $name!"
+}}
+
+# Main function
+main() {{
+    case $1 in
+        hello)
+            hello $2
+            ;;
+        --help|-h)
+            echo "Usage: {} [command] [options]"
+            echo "Commands:"
+            echo "  hello [name]  Say hello to someone"
+            echo "  --help        Show this help message"
+            ;;
+        *)
+            echo "Welcome to {}! Use --help for more information."
+            ;;
+    esac
+}}
+
+main "$@"
+"#, project_name, project_name, project_name);
+        
+        fs::write(project_path.join("main.zsh"), main_zsh)?;
+        
+        // Create README
+        let readme = format!(r#"# {}
+
+A CLI utility created with Murex.
+
+## Installation
+
+```bash
+chmod +x main.zsh
+```
+
+## Usage
+
+```bash
+./main.zsh hello "Your Name"
+```
+"#, project_name);
+        
+        fs::write(project_path.join("README.md"), readme)?;
+        
+        Ok(())
+    }
+    
+    fn create_bun_project(&self, project_path: &Path, project_name: &str) -> Result<()> {
+        // Create bun.js
+        let bun_js = format!(r#"#!/usr/bin/env bun
+
+import {{ Command }} from 'bun';
+
+const program = new Command();
+
+program
+  .name('{}')
+  .description('A CLI utility created with Murex')
+  .version('0.1.0');
+
+program
+  .command('hello')
+  .description('Say hello')
+  .option('-n, --name <n>', 'Name to greet', 'World')
+  .action((options) => {{
+    console.log(`Hello, ${{options.name}}!`);
+  }});
+
+if (process.argv.length === 2) {{
+  console.log('Welcome to {}! Use --help for more information.');
+}} else {{
+  program.parse();
+}}
+"#, project_name, project_name);
+        
+        fs::write(project_path.join("bun.js"), bun_js)?;
+        
+        // Create README
+        let readme = format!(r#"# {}
+
+A CLI utility created with Murex.
+
+## Installation
+
+```bash
+bun install
+```
+
+## Usage
+
+```bash
+bun run bun.js hello --name "Your Name"
+```
+"#, project_name);
         
         fs::write(project_path.join("README.md"), readme)?;
         

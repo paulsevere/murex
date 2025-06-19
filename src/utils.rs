@@ -1,6 +1,10 @@
 use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
+use std::env;
+use colored::*;
+
+use crate::config::Config;
 
 /// Check if a command is available in the system PATH
 pub fn command_exists(cmd: &str) -> bool {
@@ -89,4 +93,69 @@ pub fn validate_project_name(name: &str) -> Result<()> {
     }
     
     Ok(())
+}
+
+/// Open a project directory in the configured editor
+pub fn open_project_in_editor(project_dir: &Path, config: &Config) -> Result<()> {
+    // Try to determine the editor to use
+    let editor = if let Some(ref configured_editor) = config.editor {
+        configured_editor.clone()
+    } else if let Ok(env_editor) = env::var("EDITOR") {
+        env_editor
+    } else if let Ok(env_visual) = env::var("VISUAL") {
+        env_visual
+    } else {
+        // Try common editors
+        if command_exists("code") {
+            "code".to_string()
+        } else if command_exists("vim") {
+            "vim".to_string()
+        } else if command_exists("nano") {
+            "nano".to_string()
+        } else {
+            return Err(anyhow::anyhow!("No editor found. Please set EDITOR environment variable or configure with 'murex config set editor <your-editor>'"));
+        }
+    };
+    
+    println!("  📝 Opening project in {}", editor.bright_blue());
+    
+    // Special handling for VS Code and similar editors that can open directories
+    if editor == "code" || editor == "subl" || editor == "atom" {
+        Command::new(&editor)
+            .arg(project_dir)
+            .spawn()?;
+    } else {
+        // For terminal editors, open the main file instead of the directory
+        let main_file = find_main_file(project_dir)?;
+        Command::new(&editor)
+            .arg(&main_file)
+            .spawn()?;
+    }
+    
+    Ok(())
+}
+
+/// Find the main file to open for a project
+fn find_main_file(project_dir: &Path) -> Result<std::path::PathBuf> {
+    // Try to find the main file based on common patterns
+    let candidates = vec![
+        "src/main.rs",
+        "main.py", 
+        "index.js",
+        "bun.js",
+        "main.go",
+        "main.sh",
+        "main.zsh",
+        "README.md",
+    ];
+    
+    for candidate in candidates {
+        let file_path = project_dir.join(candidate);
+        if file_path.exists() {
+            return Ok(file_path);
+        }
+    }
+    
+    // If no main file found, just return the project directory
+    Ok(project_dir.to_path_buf())
 }

@@ -7,6 +7,7 @@ mod config;
 mod templates;
 mod project;
 mod utils;
+mod path_manager;
 
 use cli::Commands;
 
@@ -34,6 +35,12 @@ fn main() -> Result<()> {
         }
         Commands::Remove { name } => {
             cli::remove_project(name)?;
+        }
+        Commands::Install { name } => {
+            cli::install_project(name)?;
+        }
+        Commands::Uninstall { name } => {
+            cli::uninstall_project(name)?;
         }
         Commands::Template { action } => {
             cli::handle_template_command(action)?;

@@ -40,6 +40,9 @@ impl Project {
             "python" => self.build_python(),
             "node" => self.build_node(),
             "go" => self.build_go(),
+            "bash" => self.build_bash(),
+            "zsh" => self.build_zsh(),
+            "bun" => self.build_bun(),
             _ => Err(anyhow::anyhow!("Unknown template: {}", self.template)),
         }
     }
@@ -131,6 +134,63 @@ impl Project {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(anyhow::anyhow!("Go build failed:\n{}", stderr));
+        }
+        
+        Ok(())
+    }
+    
+    fn build_bash(&self) -> Result<()> {
+        println!("  🐚 Building Bash project...");
+        let main_script = self.path.join("main.sh");
+        if main_script.exists() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&main_script)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&main_script, perms)?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn build_zsh(&self) -> Result<()> {
+        println!("  🐚 Building Zsh project...");
+        let main_script = self.path.join("main.zsh");
+        if main_script.exists() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&main_script)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&main_script, perms)?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn build_bun(&self) -> Result<()> {
+        println!("  🐰 Building Bun project...");
+        let output = Command::new("bun")
+            .args(&["install"])
+            .current_dir(&self.path)
+            .output()?;
+            
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("Bun install failed:\n{}", stderr));
+        }
+        
+        let output = Command::new("bun")
+            .args(&["run", "start"])
+            .current_dir(&self.path)
+            .output()?;
+            
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("Bun start failed:\n{}", stderr));
         }
         
         Ok(())
