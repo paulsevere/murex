@@ -1,0 +1,28 @@
+[package]
+name = "murex"
+version = "0.1.0"
+edition = "2021"
+description = "A command line tool for creating and managing user-made CLI utilities"
+license = "MIT"
+repository = "https://github.com/user/cli-maker"
+
+[[bin]]
+name = "murex"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+dirs = "5.0"
+colored = "2.0"
+dialoguer = "0.11"
+tempfile = "3.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.0"
