@@ -48,6 +48,9 @@ fn main() -> Result<()> {
         Commands::Config { action } => {
             cli::handle_config_command(action)?;
         }
+        Commands::Completions { shell } => {
+            cli::generate_completions(shell)?;
+        }
     }
     
     Ok(())

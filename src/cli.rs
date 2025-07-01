@@ -1,8 +1,10 @@
-use clap::Subcommand;
+use clap::{Subcommand, Parser};
+use clap_complete::{generate, Shell};
 use anyhow::Result;
 use colored::*;
 use dialoguer::{Confirm, Select, Input};
 use std::path::PathBuf;
+use std::io;
 
 use crate::config::{Config, get_config_dir};
 use crate::project::{Project, ProjectManager};
@@ -51,6 +53,11 @@ pub enum Commands {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
+    },
+    /// Generate shell completions
+    Completions {
+        #[arg(long)]
+        shell: Shell,
     },
 }
 
@@ -428,5 +435,14 @@ pub fn uninstall_project(name: String) -> Result<()> {
     
     println!("{} Successfully uninstalled: {}", "✅".bright_green(), name.bright_blue());
     
+    Ok(())
+}
+
+pub fn generate_completions(shell: Shell) -> Result<()> {
+    use crate::main::Cli;
+    use clap::CommandFactory;
+    
+    let mut cmd = Cli::command();
+    generate(shell, &mut cmd, "murex", &mut io::stdout());
     Ok(())
 }
